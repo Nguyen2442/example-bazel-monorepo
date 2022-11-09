@@ -1,0 +1,21 @@
+############
+# Python   #
+############
+build --python_path="/usr/local/bin/python3"
+
+############
+# Java     #
+############
+
+############
+# Scala    #
+############
+build --strategy=Scalac=worker
+test --strategy=Scalac=worker
+
+############
+# Other    #
+############
+try-import %workspace%/linting.bazelrc
+
+test --test_output=all

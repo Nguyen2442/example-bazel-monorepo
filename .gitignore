@@ -1,0 +1,19 @@
+##################
+# Bazel
+##################
+bazel-*
+# Intellij with Bazel (IJWB)
+.ijwb/
+
+# TODO(Jonathon): Remove when I add the linters on CI instances
+linting.bazelrc
+
+##################
+# Intellij
+##################
+.idea
+
+##################
+# Terraform
+##################
+infrastructure/**/.terraform/**
