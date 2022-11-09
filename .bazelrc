@@ -1,0 +1,27 @@
+############
+# Python   #
+############
+build --python_path="/usr/local/bin/python3"
+
+############
+# Java     #
+############
+
+############
+# Scala    #
+############
+build --strategy=Scalac=worker
+test --strategy=Scalac=worker
+
+############
+# Other    #
+############
+# Linting - See https://github.com/thundergolfer/bazel-linting-system
+build --aspects //tools/linting:aspect.bzl%lint
+build --output_groups=+report
+
+# Intellij Plugin
+build --incompatible_depset_is_not_iterable=false
+
+# Include git version info
+build --workspace_status_command tools/build/bazel_workspace_status.sh
