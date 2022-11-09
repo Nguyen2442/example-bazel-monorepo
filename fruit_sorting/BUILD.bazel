@@ -1,0 +1,17 @@
+load("@pip_dependencies//:requirements.bzl", "requirement")
+
+MAIN_SRCS = glob(["*.py"])
+
+MAIN_DEPS = [
+    requirement("click"),
+]
+
+py_binary(
+  name = "main",
+  srcs = ["main.py"],
+  default_python_version = "PY3",
+  imports = [""],
+  main = "main.py",
+  srcs_version= "PY3",
+  deps = MAIN_DEPS
+)
