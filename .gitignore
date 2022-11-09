@@ -1,0 +1,11 @@
+##################
+# Bazel
+##################
+bazel-*
+# Intellij with Bazel (IJWB)
+.ijwb/
+
+##################
+# Intellij
+##################
+.idea
