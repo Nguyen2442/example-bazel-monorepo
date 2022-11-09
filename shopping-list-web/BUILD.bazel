@@ -1,0 +1,138 @@
+# Copyright 2018 Google LLC
+# Modifications copyright (C) 2019 Jonathon I Belotti
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@io_bazel_rules_docker//java:image.bzl", "java_image")
+load("@io_bazel_rules_docker//container:container.bzl", "container_image")
+load("@k8s_deploy//:defaults.bzl", "k8s_deploy")
+
+# The package rule declares this directory as a Bazel package
+# which scopes targets defined in this Build file under this package.
+# The visibility parameter declares which packages can call targets
+# in this package. In this case, we're saying anyone can call these targets.
+# See https://docs.bazel.build/versions/master/be/functions.html#package
+package(default_visibility = ["//visibility:public"])
+
+java_library(
+    name = "todo",
+    srcs = ["src/main/java/com/example/Todo.java"],
+)
+
+java_library(
+    name = "demo",
+    srcs = ["src/main/java/com/example/Demo.java"],
+)
+
+java_library(
+    name = "todo_not_found_exception",
+    srcs = ["src/main/java/com/example/TodoNotFoundException.java"],
+    deps = [
+        "@maven//:org_springframework_spring_web",
+        "@maven//:org_springframework_boot_spring_boot_starter_web",
+    ],
+)
+
+java_library(
+    name = "todo_controller",
+    srcs = ["src/main/java/com/example/TodoController.java"],
+    deps = [
+        ":todo",
+        ":todo_not_found_exception",
+        "@maven//:org_springframework_spring_web",
+        "@maven//:org_springframework_boot_spring_boot_starter_test",
+        "@maven//:org_springframework_boot_spring_boot_starter_web",
+    ],
+)
+
+# Create a Java image with the distroless Java runtime as a base image
+# This target actually compiles the Java application we define below
+# It essentially does `java_binary` and then creates an image containing it.
+# See https://docs.bazel.build/versions/master/be/java.html#java_binary
+# See https://github.com/bazelbuild/rules_docker#java_image
+java_image(
+    # name of the target that we use below in `container_image`
+    name = "java_spring_boot_image",
+    # the source file we need to compile
+    srcs = ["src/main/java/com/example/Application.java"],
+    # the main class the Java binary runs
+    main_class = "com.example.Application",
+    # the dependencies the Java binary needs
+    # Dependencies are other Bazel targets.
+    # The first 2 are Bazel targets to compile Java sources
+    # that we define above. They're run before this target.
+    # The rest are Bazel targets that `maven_jar` exposed
+    # in the WORKSPACE
+    deps = [
+        ":todo",
+        ":todo_controller",
+        "@maven//:org_springframework_spring_webmvc",
+        "@maven//:org_springframework_spring_context",
+        "@maven//:org_springframework_boot_spring_boot",
+        "@maven//:org_springframework_boot_spring_boot_autoconfigure",
+        "@maven//:org_springframework_spring_web",
+        "@maven//:org_springframework_boot_spring_boot_starter_test",
+        "@maven//:org_springframework_boot_spring_boot_starter_web",
+    ],
+)
+
+# create a container image with our java_image in it
+# See https://github.com/bazelbuild/rules_docker#container_image-1
+container_image(
+    name = "app_image",
+    base = ":java_spring_boot_image",
+    # expose the 8080 port, which is what our Java app runs on
+    ports = ["8080"],
+    # The directory in which to expand the base image files
+    directory = "/app",
+    # Initial working directory when running the image
+    workdir = "/app",
+)
+
+# Configure the K8s deployment for the Java API
+# This is how we're able to call `bazel run //shopping-list-web:k8s.apply`
+# in scripts/create.sh
+# `k8s_deploy` is a rule we created with `k8s_defaults` in the WORKSPACE
+# See https://github.com/bazelbuild/rules_k8s
+k8s_deploy(
+    # the name of our Bazel target we call in the create script
+    name = "k8s",
+    # the define bazel cli flag is used for cluster, context and image_chroot
+    # the name of our GKE cluster to deploy to
+    # this is read from a variable we set in the create script
+    cluster = "$(cluster)",
+    # the name of the kubectl context to use for authentication
+    # this is read from a variable we set in the create script
+    context = "$(cluster)",
+    # the name of our GCR image repo to push the image to
+    # this is read from a variable we set in the create script
+    image_chroot = "$(repo)",
+    # what images to build, push to the registry, and deploy to k8s
+    images = {
+        # the image pushed to our "image_chroot" called "java_spring_boot"
+        # with a label of "do_not_delete". You can set whatever label you'd like.
+        # "do_not_delete" is a common string to prevent people from accidentally
+        # deleting the image in the container registry.
+        # ":app_image" is the Bazel target to be called to generate the image
+        # see the above rule where we define the "app_image" target.
+        "java_spring_boot:do_not_delete": ":app_image",
+    },
+    # what YAML template should we use for the k8s deployment
+    # See shopping-list-web/manifests/BUILD.bazel for how
+    # we tell Bazel to export a file as a Bazel rule
+    # This is called "template" because Bazel will generate the actual
+    # deployment.yaml that includes the full path to the image we asked
+    # Bazel to build and push to our registry. The path will be a specific
+    # SHA for the image as well.
+    template = "//shopping-list-web/manifests:deployment.yaml",
+)
